@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="it">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+        <title>Ansible: automazione IT, KISS | Linux Day Bari 2016 | Andrea Scarpino</title>
+
+        <meta name="description" content="Un'introduzione ad Ansible">
+        <meta name="author" content="Andrea Scarpino">
+
+        <link rel="stylesheet" href="css/reveal.css">
+        <link rel="stylesheet" href="css/theme/white.css">
+
+        <!-- Theme used for syntax highlighting of code -->
+        <link rel="stylesheet" href="lib/css/zenburn.css">
+
+        <!-- Printing and PDF exports -->
+        <script>
+            var link = document.createElement( 'link' );
+            link.rel = 'stylesheet';
+            link.type = 'text/css';
+            link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+            document.getElementsByTagName( 'head' )[0].appendChild( link );
+        </script>
+    </head>
+    <body>
+        <div class="reveal">
+            <div class="slides">
+                <section>
+                    <h1>Ansible: automazione IT, KISS</h1>
+                    <p><small>di Andrea Scarpino</small></p>
+                    <br/>
+                    <p>Linux Day Bari 2016 - 22/10/2016</p>
+                </section>
+
+                <section>
+                    <section>
+                        <p><q cite="https://ansible.com">&ldquo;Ansible is <strong>Simple</strong> IT Automation&rdquo;</q><br />
+                        <q cite="https://ansible.com">&ldquo;AUTOMATION <strong>FOR EVERYONE</strong>&rdquo;</q><br />
+                        <q cite="https://ansible.com">&ldquo;Deploy apps. Manage systems. <strong>Crush complexity</strong>&rdquo;</q></p>
+                    </section>
+                    <section>
+                        <h2>&ldquo;Automazione&rdquo;, ovvero?</h2>
+                        <ul>
+                            <li class="fragment">Provisioning</li>
+                            <li class="fragment">Gestione dele configurazioni</li>
+                            <li class="fragment">Deploy delle applicazioni</li>
+                            <li class="fragment">Continuous delivery</li>
+                            <li class="fragment">Aggiornamenti di sicurezza</li>
+                            <li class="fragment">Orchestring</li>
+                        </ul>
+                    </section>
+                </section>
+
+                <section>
+                    <h2>Perch&eacute; Ansible?</h2>
+                    <ul>
+                        <li class="fragment">Free and Open Source Software</li>
+                        <li class="fragment">Nessun agente sui server</li>
+                        <li class="fragment">Bassa curva d'apprendimento</li>
+                        <li class="fragment">774 moduli di default</li>
+                        <li class="fragment">Forte community (Ansible Galaxy)</li>
+                    </ul>
+                </section>
+
+                <section>
+                    <section>
+                        <h2>Installazione</h2>
+                        <p>Ubuntu/Debian:<pre><code>$ sudo apt-get install ansible</code></pre>
+                        CentOS/Fedora:<pre><code># yum install ansible</code></pre>
+                        Arch Linux:<pre><code># pacman -S ansible</code></pre>
+                        tramite <code>pip</code>:
+                        <pre><code># pip install ansible</code></pre></p>
+                    </section>
+
+                    <section>
+                        <h2>Requisiti dei server</h2>
+                        <p>Linux:<br />Python 2.7.x; connessione tramite SSH</p>
+                        <p>Windows:<br />PowerShell &gt;= 3; connessione tramite WinRM</p>
+                    </section>
+
+                    <section>
+                        <h2>Test della connessione</h2>
+                        <pre><code>$ cat inventory
+linux.local ansible_user=andrea
+day.local ansible_port=2016
+bari.local ansible_password=winzoz ansible_connection=winrm</code></pre>
+                        <pre><code>$ ansible all -i inventory -m ping
+linux.local | SUCCESS =&gt; {
+    "changed": false,
+    "ping": "pong"
+}
+day.local | UNREACHABLE! =&gt; {
+    "changed": false,
+    "msg": "Failed to connect to the host via ssh.",
+    "unreachable": true
+}</code></pre>
+                    </section>
+
+                    <section>
+                        <h2>Installare un pacchetto</h2>
+                        <pre><code>ansible -i inventory all -b -m yum -a name=nginx
+linux.local | SUCCESS =&gt; {
+    "changed": true,
+    "msg": "",
+    "rc": 0,
+    "results": [
+        "Installed:\n  nginx.x86_64 1:1.10.1-1.el7\nComplete!"
+    ]
+}</code></pre>
+                        <pre><code>ansible -i inventory all -b -m yum -a name=nginx
+linux.local | SUCCESS =&gt; {
+    "changed": true,
+    "msg": "",
+    "rc": 0,
+    "results": [
+        "nginx-1.10.1-1.el7.x86_64 providing nginx is already installed"
+    ]
+}</code></pre>
+                    </section>
+                </section>
+
+                <section>
+                    <section>
+                        <h2>I playbook</h2>
+                        <p><pre><code>- hosts: all
+  tasks:
+    - name: Assicurati che nginx sia installato
+      package: name=nginx
+    - name: Assicurati che nginx sia avviato
+      service: name=nginx enabled=yes state=started
+    - name: Check if firewalld is used
+      stat: path=/usr/sbin/firewalld
+      register: firewalld
+    - name: Assicurati che la porta 80 sia aperta
+      firewalld: port=80/tcp state=enabled immediate=yes permanent=yes
+      when: firewalld.stat.exists
+    - name: Assicurati che la porta 80 sia aperta
+      iptables: chain=INPUT protocol=tcp match=tcp destination_port=80 jump=ACCEPT
+      when: not firewalld.stat.exists
+</pre></code></p>
+                    </section>
+
+                    <section>
+                        <h4>I playbook (continua)</h4>
+<p><pre><code>$ ansible-playbook -i inventory nginx.yml
+PLAY [all] ****************************************
+TASK [setup] **************************************
+ok: [linux.local]
+TASK [Assicurati che nginx sia installato] ********
+ok: [linux.local]
+TASK [Assicurati che nginx sia avviato] ***********
+ok: [linux.local]
+TASK [Check if firewalld is used] *****************
+ok: [linux.local]
+TASK [Assicurati che la porta 80 sia aperta] ******
+changed: [linux.local]
+TASK [Assicurati che la porta 80 sia aperta] ******
+skipping: [linux.local]
+PLAY RECAP ****************************************
+linux.local : ok=5 changed=1 unreachable=0 failed=0</code></pre></p>
+                    </section>
+
+                    <section>
+                        <h4>Variabili</h4>
+                        <p><pre><code>- hosts: all
+  vars:
+    users:
+     - nome: nicola
+       ruolo: "Full stack developer"
+     - nome: vito
+       ruolo: "Frontend developer"
+  tasks:
+   - name: Crea gli utenti e aggiungili al gruppo developers
+     user: name="{{ item.nome }}" comment="{{ item.ruolo | default() }}"
+     with_items: "{{ users }}"</code></pre>
+                        <pre><code>$ cat host_vars/linux.local.yml
+users:
+ - nome: nicola
+   ruolo: "Full stack developer"</code></pre>
+                        <pre><code>$ cat group_vars/all.yml
+users:
+ - nome: nicola
+   ruolo: "Full stack developer"</code></pre></p>
+                    </section>
+
+                    <section>
+                        <h4>Templates</h4>
+                        <p><pre><code>- name: Installa la configurazione nginx
+  template: src=nginx.conf.j2 dest="/etc/nginx/conf.d/{{ item.nome }}"
+  with_items: "{{ users }}"</code></pre>
+                        <pre><code>$ cat templates/nginx.conf.j2
+server {
+    listen 80;
+
+    location / {
+        root   /srv/http/{{ item.nome }};
+        index  index.html;
+    }
+}</code></pre></p>
+                    </section>
+
+                    <section>
+                        <h4>Handlers</h4>
+                        <p><pre><code> handlers:
+- name: Riavvia nginx
+  service: name=nginx state=restarted</code></pre>
+                        <pre><code>- name: Installa la pagina di default
+  copy: src=index.html dest="/srv/http/{{ item.nome }}"
+  with_items: "{{ users }}"
+  notify: Riavvia nginx</code></pre></p>
+                    </section>
+
+                    <section>
+                        <h4>Filtri Jinja2</h4>
+                        <ul>
+                            <li><code>{{ variable | mandatory }}</code></li>
+                            <li><code>{{ variable | default("foo") }}</code></li>
+                            <li><code>{{ variable | to_json }}</code></li>
+                            <li><code>{{ lista | min }}</code></li>
+                            <li><code>{{ lista | random }}</code></li>
+                            <li><code>{{ path | basename }}</code></li>
+                            <li><code>{{ path | splitext }}</code></li>
+                            <li><code>{%for u in users%}{{u}}{%endfor%}</code></li>
+                        </ul>
+                    </section>
+
+                    <section>
+                        <h4>Gestione degli errori</h4>
+                        <ul style="width: 80%;">
+                            <li><pre><code>- name: Installa nginx con yum
+  yum: name=nginx
+  ignore_errors: True</pre></code></li>
+                            <li><pre><code>- name: Installa nginx con yum
+  yum: name=nginx
+  register: comando
+  failed_when: "'Failed' in comando.stdout"</pre></code></li>
+                            <li><pre><code>tasks:
+ - block:
+   - name: Installa nginx con yum
+     yum: name=nginx
+   rescue:
+   - name: Trova da solo il package manager
+     package: name=nginx</code></pre></li>
+                        </ul>
+                    </section>
+                </section>
+
+                <section>
+                    <h2>I ruoli</h2>
+                    <p><pre><code>$ cat playbook.yml
+- hosts: all
+  roles:
+   - nginx</code></pre>
+                    <pre><code>$ tree nginx
+nginx
+├── defaults
+├── files
+├── handlers
+├── meta
+├── tasks
+├── templates
+└── vars</code></pre></p>
+                </section>
+
+                <section>
+                    <h4>References</h4>
+                    <ul>
+                         <li><a href="https://docs.ansible.com/ansible/index.html">https://docs.ansible.com/ansible/</a></li>
+                        <li><a href="http://jinja.pocoo.org/docs/dev/">http://jinja.pocoo.org/docs/dev/</a></li>
+                        <li><a href="http://www.yaml.org/start.html">http://www.yaml.org/start.html</a></li>
+                    </ul>
+                    <br/>
+                    <br/>
+                    <br/>
+                    <strong>Andrea Scarpino</strong>
+                    <p>Software Developer involved in FOSS</p>
+                    <a href="https://andreascarpino.it/">https://andreascarpino.it</a>
+                    <p>@ilpianista_ | git{hub,lab}.com/ilpianista</p>
+                </section>
+            </div>
+        </div>
+
+        <script src="lib/js/head.min.js"></script>
+        <script src="js/reveal.js"></script>
+
+        <script>
+            // More info https://github.com/hakimel/reveal.js#configuration
+            Reveal.initialize({
+                width: '100%',
+                height: '100%',
+                history: true,
+                progress: false,
+
+                transition: 'slide', // none/fade/slide/convex/concave/zoom
+
+                // More info https://github.com/hakimel/reveal.js#dependencies
+                dependencies: [
+                    { src: 'lib/js/classList.js', },
+                    { src: 'plugin/markdown/marked.js' },
+                    { src: 'plugin/markdown/markdown.js' },
+                    { src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } }
+                ]
+            });
+        </script>
+    </body>
+</html>
